@@ -1,9 +1,11 @@
 package main
 
-import(
-  "fmt"
+import (
+	"fmt"
+	"github.com/fiibbb/goraft/raft"
 )
 
 func main() {
-  fmt.Println("hello raft")
+	fmt.Println("Hello Raft")
+	raft.RunBasicEnsemble()
 }
