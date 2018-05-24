@@ -7,7 +7,6 @@ import (
 	"google.golang.org/grpc"
 
 	pb "github.com/fiibbb/goraft/.gen/raftpb"
-	"github.com/fiibbb/goraft/clock"
 )
 
 type requestVoteArg struct {
@@ -95,7 +94,7 @@ type Node struct {
 	maxRPCBackOff      time.Duration
 
 	// life cycle
-	clock    clock.Clock
+	clock    clock
 	started  bool
 	stopChan chan interface{}
 }

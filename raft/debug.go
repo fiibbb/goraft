@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc"
 
 	pb "github.com/fiibbb/goraft/.gen/raftpb"
-	"github.com/fiibbb/goraft/clock"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -223,7 +222,7 @@ func RunBasicEnsemble() {
 			defaultHeartbeatPeriod,
 			defaultRPCTimeout,
 			defaultMaxRPCBackOff,
-			clock.NewClock(),
+			newClock(),
 			[]grpc.ServerOption{grpc.UnaryInterceptor(debugInterceptor)},
 		)
 		if err != nil {

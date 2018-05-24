@@ -9,11 +9,10 @@ import (
 	"google.golang.org/grpc"
 
 	pb "github.com/fiibbb/goraft/.gen/raftpb"
-	"github.com/fiibbb/goraft/clock"
 )
 
-func n(id, addr string, peers []peerArg, interceptor func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error)) (*Node, *clock.ManualClock, error) {
-	c := clock.NewManualClock()
+func n(id, addr string, peers []peerArg, interceptor func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error)) (*Node, *manualClock, error) {
+	c := newManualClock()
 	n, err := NewNode(
 		id,
 		addr,
@@ -41,11 +40,11 @@ func i(before func(req interface{}), after func(resp interface{}, err error)) fu
 	}
 }
 
-func step(c *clock.ManualClock) {
-	c.StepChan <- time.Now()
+func step(c *manualClock) {
+	c.stepChan <- time.Now()
 }
 
-func stepN(c *clock.ManualClock, n int) {
+func stepN(c *manualClock, n int) {
 	for i := 0; i < n; i++ {
 		step(c)
 	}
@@ -101,7 +100,7 @@ func TestInitialLeaderElection(t *testing.T) {
 	step(c2)
 
 	// Trigger election time out on n0.
-	c0.Timers[0].T()
+	c0.timers[0].T()
 
 	// Let through two `RequestVote` calls sent to n1 and n2.
 	req1 := <-i1

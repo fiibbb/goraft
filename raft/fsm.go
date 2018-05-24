@@ -9,7 +9,6 @@ import (
 	"google.golang.org/grpc"
 
 	pb "github.com/fiibbb/goraft/.gen/raftpb"
-	"github.com/fiibbb/goraft/clock"
 )
 
 func NewNode(
@@ -20,7 +19,7 @@ func NewNode(
 	heartbeatPeriod time.Duration,
 	rpcTimeout time.Duration,
 	maxRPCBackOff time.Duration,
-	clock clock.Clock,
+	clock clock,
 	grpcServerOptions []grpc.ServerOption,
 ) (*Node, error) {
 
@@ -258,9 +257,9 @@ func (n *Node) handleAppendEntries(arg *appendEntriesArg) bool {
 
 func (n *Node) runAsFollower() bool {
 	// Run event loop until state changes.
-	var electionTimer clock.Timer
+	var electionTimer timer
 	for {
-		n.clock.Step() // Wait until next clock tick.
+		n.clock.Step() // Wait until next realClock tick.
 		// Previous loop iteration may have cleared timer (upon receiving valid heartbeat),
 		// so re-initialize timer if timer is nil.
 		if electionTimer == nil {
@@ -288,7 +287,7 @@ func (n *Node) runAsFollower() bool {
 		if n.State != Follower {
 			break
 		}
-		n.clock.Step() // Wait until next clock tick.
+		n.clock.Step() // Wait until next realClock tick.
 	}
 	return true
 }
@@ -377,7 +376,7 @@ func (n *Node) runAsCandidate() bool {
 	// any RPC we receive, because then if every server in cluster gets in this state then we deadlock.
 	var resps []*pb.RequestVoteResponse
 	for {
-		n.clock.Step() // Wait until next clock tick.
+		n.clock.Step() // Wait until next realClock tick.
 		select {
 		case resp := <-respChan:
 			resps = append(resps, resp)
@@ -413,7 +412,7 @@ func (n *Node) runAsCandidate() bool {
 		if len(resps) >= respsNeeded {
 			break
 		}
-		n.clock.Step() // Wait until next clock tick.
+		n.clock.Step() // Wait until next realClock tick.
 	}
 
 	// Calculate results. Become leader if have enough votes, otherwise become follower.
@@ -601,7 +600,7 @@ func (n *Node) runAsLeader() bool {
 	heartbeatTicker := n.clock.NewTicker(n.heartbeatPeriod)
 	broadcast()
 	for {
-		n.clock.Step() // Wait until next clock tick.
+		n.clock.Step() // Wait until next realClock tick.
 		select {
 		case <-heartbeatTicker.C():
 			broadcast()
@@ -622,7 +621,7 @@ func (n *Node) runAsLeader() bool {
 			heartbeatTicker.Stop()
 			break
 		}
-		n.clock.Step() // Wait until next clock tick.
+		n.clock.Step() // Wait until next realClock tick.
 	}
 	return true
 }
