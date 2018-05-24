@@ -87,7 +87,7 @@ type Node struct {
 	clientOpChan      chan *clientOpArg
 	dumpStateChan     chan *dumpStateArg
 
-	// others
+	// timers
 	minElectionTimeout time.Duration
 	electionTimeout    time.Duration
 	heartbeatPeriod    time.Duration
@@ -96,4 +96,8 @@ type Node struct {
 
 	// clock
 	clock clock.Clock
+
+	// life cycle
+	started  bool
+	stopChan chan interface{}
 }

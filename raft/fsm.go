@@ -93,10 +93,16 @@ func NewNode(
 		maxRPCBackOff:      maxRPCBackOff,
 
 		clock: clock,
+
+		started:  false,
+		stopChan: make(chan interface{}),
 	}, nil
 }
 
 func (n *Node) Start() error {
+	if n.started {
+		return ErrAlreadyStarted
+	}
 	for _, p := range n.peers {
 		conn, err := grpc.Dial(
 			p.addr,
@@ -114,6 +120,17 @@ func (n *Node) Start() error {
 	}
 	go n.server.Serve(lis)
 	go n.eventLoop()
+	n.started = true
+	return nil
+}
+
+func (n *Node) Stop() error {
+	if !n.started {
+		return ErrNotStartedYet
+	}
+	n.server.Stop()
+	n.stopChan <- 1
+	n.started = false
 	return nil
 }
 
@@ -239,7 +256,7 @@ func (n *Node) handleAppendEntries(arg *appendEntriesArg) bool {
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-func (n *Node) runAsFollower() {
+func (n *Node) runAsFollower() bool {
 	// Run event loop until state changes.
 	var electionTimer clock.Timer
 	for {
@@ -264,14 +281,17 @@ func (n *Node) runAsFollower() {
 			arg.errChan <- ErrCanNotHandleClientOpFollower
 		case arg := <-n.dumpStateChan:
 			arg.respChan <- &pb.DumpStateResponse{State: dumpState(n)}
+		case <-n.stopChan:
+			return false
 		}
 		if n.State != Follower {
 			break
 		}
 	}
+	return true
 }
 
-func (n *Node) runAsCandidate() {
+func (n *Node) runAsCandidate() bool {
 
 	// Increment term.
 	// Note that by bumping term upon entering candidate state, we give the system tendency such that:
@@ -366,6 +386,8 @@ func (n *Node) runAsCandidate() {
 			arg.errChan <- ErrCanNotHandleClientOpCandidate
 		case arg := <-n.dumpStateChan:
 			arg.respChan <- &pb.DumpStateResponse{State: dumpState(n)}
+		case <-n.stopChan:
+			return false
 		}
 		// Previous step may have changed state to something else,
 		// so check and terminate here if state is no longer candidate.
@@ -381,7 +403,7 @@ func (n *Node) runAsCandidate() {
 			}
 			workMu.Unlock()
 			// TODO: We have already set rs.votedFor to rs.id, verify that it's ok to simply return here.
-			return
+			return true
 		}
 		// If we have got response (including rejected votes) from majority of peers,
 		// then we are ready to calculate the result.
@@ -404,9 +426,10 @@ func (n *Node) runAsCandidate() {
 		debug("%s (upon receiving %d votes)\n", stateChange(n.Id, n.State, Follower), votesReceived)
 		n.State = Follower
 	}
+	return true
 }
 
-func (n *Node) runAsLeader() {
+func (n *Node) runAsLeader() bool {
 
 	// Reinitialize leader states (nextIndex, matchIndex)
 	for id := range n.NextIndex {
@@ -587,26 +610,33 @@ func (n *Node) runAsLeader() {
 			clientOp(arg)
 		case arg := <-n.dumpStateChan:
 			arg.respChan <- &pb.DumpStateResponse{State: dumpState(n)}
+		case <-n.stopChan:
+			return false
 		}
 		if n.State != Leader {
 			heartbeatTicker.Stop()
 			break
 		}
 	}
+	return true
 }
 
 func (n *Node) eventLoop() {
 	debug("%s (bootstrap)\n", stateChange(n.Id, Follower, Follower))
 	for {
+		keepRunning := true
 		switch n.State {
 		case Follower:
-			n.runAsFollower()
+			keepRunning = n.runAsFollower()
 		case Candidate:
-			n.runAsCandidate()
+			keepRunning = n.runAsCandidate()
 		case Leader:
-			n.runAsLeader()
+			keepRunning = n.runAsLeader()
 		default:
 			panic("unrecognized process state")
+		}
+		if !keepRunning {
+			return
 		}
 	}
 }
