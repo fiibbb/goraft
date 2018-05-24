@@ -5,9 +5,19 @@ import (
 )
 
 type Clock interface {
+
+	// Step blocks until the next clock cycle arrives. This method should be
+	// called in each "step" of the state machine's event loop, so that
+	// in tests we have a way to control the progress of the state machine.
+	Step()
+
 	NewTimer(duration time.Duration) Timer
+
 	NewTicker(duration time.Duration) Ticker
+
 	Sleep(duration time.Duration)
+
+	Stop()
 }
 
 type Timer interface {
@@ -21,10 +31,28 @@ type Ticker interface {
 }
 
 func NewClock() Clock {
-	return &clock{}
+	c := &clock{step: make(chan time.Time)}
+	go func() {
+		c.stepTicker = time.NewTicker(time.Millisecond)
+		for t := range c.stepTicker.C {
+			c.step <- t
+		}
+	}()
+	return c
 }
 
-type clock struct{}
+type clock struct {
+	stepTicker *time.Ticker
+	step       chan time.Time
+}
+
+func (c *clock) Step() {
+	<-c.step
+}
+
+func (c *clock) Stop() {
+	c.stepTicker.Stop()
+}
 
 func (c *clock) NewTimer(duration time.Duration) Timer {
 	return &timer{timer: time.NewTimer(duration)}

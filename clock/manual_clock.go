@@ -1,19 +1,27 @@
 package clock
 
-import "time"
+import (
+	"time"
+)
 
 type ManualClock struct {
-	Timers  []*ManualTimer
-	Tickers []*ManualTicker
-	S       chan time.Time
+	Timers    []*ManualTimer
+	Tickers   []*ManualTicker
+	SleepChan chan time.Time
+	StepChan  chan time.Time
 }
 
 func NewManualClock() *ManualClock {
 	return &ManualClock{
-		Timers:  make([]*ManualTimer, 0),
-		Tickers: make([]*ManualTicker, 0),
-		S:       make(chan time.Time),
+		Timers:    make([]*ManualTimer, 0),
+		Tickers:   make([]*ManualTicker, 0),
+		SleepChan: make(chan time.Time),
+		StepChan:  make(chan time.Time),
 	}
+}
+
+func (mc *ManualClock) Step() {
+	<-mc.StepChan
 }
 
 func (mc *ManualClock) NewTimer(duration time.Duration) Timer {
@@ -29,7 +37,11 @@ func (mc *ManualClock) NewTicker(duration time.Duration) Ticker {
 }
 
 func (mc *ManualClock) Sleep(duration time.Duration) {
-	<-mc.S
+	<-mc.SleepChan
+}
+
+func (mc *ManualClock) Stop() {
+	// nop
 }
 
 type ManualTimer struct {

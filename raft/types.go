@@ -94,10 +94,8 @@ type Node struct {
 	rpcTimeout         time.Duration
 	maxRPCBackOff      time.Duration
 
-	// clock
-	clock clock.Clock
-
 	// life cycle
+	clock    clock.Clock
 	started  bool
 	stopChan chan interface{}
 }
