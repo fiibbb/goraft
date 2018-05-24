@@ -6,9 +6,8 @@ import (
 	"math/rand"
 	"time"
 
-	"google.golang.org/grpc/metadata"
-
 	pb "github.com/fiibbb/goraft/.gen/raftpb"
+	"google.golang.org/grpc/metadata"
 )
 
 func randElectionTimeout(minElectionTimeout time.Duration) time.Duration {

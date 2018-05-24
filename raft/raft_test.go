@@ -5,10 +5,9 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/fiibbb/goraft/.gen/raftpb"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
-
-	pb "github.com/fiibbb/goraft/.gen/raftpb"
 )
 
 func n(id, addr string, peers []peerArg, interceptor func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error)) (*Node, *manualClock, error) {
@@ -94,6 +93,10 @@ func TestInitialLeaderElection(t *testing.T) {
 	assert.Equal(t, n1.State, Follower)
 	assert.Equal(t, n2.State, Follower)
 
+	assert.Equal(t, n0.Term, uint64(0))
+	assert.Equal(t, n1.Term, uint64(0))
+	assert.Equal(t, n2.Term, uint64(0))
+
 	// Step every node into follower event loop.
 	step(c0)
 	step(c1)
@@ -123,8 +126,10 @@ func TestInitialLeaderElection(t *testing.T) {
 
 	// Verify that n0 is in `Leader` state.
 	assert.Equal(t, n0.State, Leader)
-
-	// Verify that n1, n2 are in `Follower state.
 	assert.Equal(t, n1.State, Follower)
 	assert.Equal(t, n2.State, Follower)
+
+	assert.Equal(t, n0.Term, uint64(1))
+	assert.Equal(t, n1.Term, uint64(1))
+	assert.Equal(t, n2.Term, uint64(1))
 }

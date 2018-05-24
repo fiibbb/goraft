@@ -7,12 +7,11 @@ import (
 	"strings"
 	"sync"
 
+	pb "github.com/fiibbb/goraft/.gen/raftpb"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
 	"google.golang.org/grpc"
-
-	pb "github.com/fiibbb/goraft/.gen/raftpb"
 )
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -4,9 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
-
 	pb "github.com/fiibbb/goraft/.gen/raftpb"
+	"google.golang.org/grpc"
 )
 
 type requestVoteArg struct {

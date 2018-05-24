@@ -6,9 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
-
 	pb "github.com/fiibbb/goraft/.gen/raftpb"
+	"google.golang.org/grpc"
 )
 
 func NewNode(
@@ -42,7 +41,7 @@ func NewNode(
 		maxRPCBackOff = time.Duration(int64(heartbeatPeriod) / 2)
 	}
 
-	// Initialize nextIndex and matchIndex.
+	// Initialize peer states
 	nextIndex := make(map[string]uint64)
 	for _, p := range peers {
 		nextIndex[p.id] = 0
@@ -51,8 +50,6 @@ func NewNode(
 	for _, pArg := range peers {
 		matchIndex[pArg.id] = 0
 	}
-
-	// Connect to peers
 	peersMap := make(map[string]*peer)
 	for _, pArg := range peers {
 		peersMap[pArg.id] = &peer{
@@ -221,7 +218,8 @@ func (n *Node) handleAppendEntries(arg *appendEntriesArg) bool {
 				Term:    n.Term,
 				Success: false,
 			}
-			return false
+			// TODO: Check if we should return true here instead -- a rejected request is still a valid heartbeat.
+			return true
 		}
 	}
 
@@ -588,6 +586,7 @@ func (n *Node) runAsLeader() bool {
 			Data:  arg.req.Data,
 		}
 		n.Log = append(n.Log, newLogEntry)
+		debug("%s [--LOG---]: %s received ClientOp, finished with log %s\n", ts(), n.Id, fmtLog(n.Log))
 		// TODO: Wait until log is applied to state machine to reply
 		// Note that this is a bit tricky. I'm not sure I fully understand how long
 		// I'm supposed to "wait" -- Consider the case where the current leader
