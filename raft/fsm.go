@@ -21,6 +21,7 @@ func NewNode(
 	rpcTimeout time.Duration,
 	maxRPCBackOff time.Duration,
 	clock clock.Clock,
+	grpcServerOptions []grpc.ServerOption,
 ) (*Node, error) {
 
 	// Validate arguments
@@ -80,7 +81,7 @@ func NewNode(
 		peers: peersMap,
 
 		addr:   addr,
-		server: grpc.NewServer(grpc.UnaryInterceptor(debugInterceptor)),
+		server: grpc.NewServer(grpcServerOptions...),
 
 		requestVoteChan:   make(chan *requestVoteArg),
 		appendEntriesChan: make(chan *appendEntriesArg),
@@ -287,6 +288,7 @@ func (n *Node) runAsFollower() bool {
 		if n.State != Follower {
 			break
 		}
+		n.clock.Step() // Wait until next clock tick.
 	}
 	return true
 }
@@ -411,6 +413,7 @@ func (n *Node) runAsCandidate() bool {
 		if len(resps) >= respsNeeded {
 			break
 		}
+		n.clock.Step() // Wait until next clock tick.
 	}
 
 	// Calculate results. Become leader if have enough votes, otherwise become follower.
@@ -619,6 +622,7 @@ func (n *Node) runAsLeader() bool {
 			heartbeatTicker.Stop()
 			break
 		}
+		n.clock.Step() // Wait until next clock tick.
 	}
 	return true
 }

@@ -224,6 +224,7 @@ func RunBasicEnsemble() {
 			defaultRPCTimeout,
 			defaultMaxRPCBackOff,
 			clock.NewClock(),
+			[]grpc.ServerOption{grpc.UnaryInterceptor(debugInterceptor)},
 		)
 		if err != nil {
 			panic(err)
