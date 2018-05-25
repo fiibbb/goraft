@@ -182,7 +182,7 @@ func (n *Node) handleRequestVote(arg *requestVoteArg) {
 	}
 }
 
-func (n *Node) handleAppendEntries(arg *appendEntriesArg) bool {
+func (n *Node) handleAppendEntries(arg *appendEntriesArg, state ProcessState) bool {
 
 	// Reject request with lower term.
 	if arg.req.Term < n.Term {
@@ -199,6 +199,11 @@ func (n *Node) handleAppendEntries(arg *appendEntriesArg) bool {
 		n.Term = arg.req.Term
 		n.State = Follower
 		n.VotedFor = none
+	}
+
+	// Upon receiving `AppendEntriesRequest` in `Candidate` state with equal term, revert to follower.
+	if arg.req.Term == n.Term && state == Candidate {
+		n.State = Follower
 	}
 
 	// Handle heartbeat
@@ -270,7 +275,7 @@ func (n *Node) runAsFollower() bool {
 		case arg := <-n.requestVoteChan:
 			n.handleRequestVote(arg)
 		case arg := <-n.appendEntriesChan:
-			if n.handleAppendEntries(arg) {
+			if n.handleAppendEntries(arg, n.State) {
 				// Clear timer so it can be reset in next loop iteration.
 				electionTimer.Stop()
 				electionTimer = nil
@@ -381,7 +386,7 @@ func (n *Node) runAsCandidate() bool {
 		case arg := <-n.requestVoteChan:
 			n.handleRequestVote(arg)
 		case arg := <-n.appendEntriesChan:
-			n.handleAppendEntries(arg)
+			n.handleAppendEntries(arg, n.State)
 		case arg := <-n.clientOpChan:
 			arg.errChan <- ErrCanNotHandleClientOpCandidate
 		case arg := <-n.dumpStateChan:
@@ -608,7 +613,7 @@ func (n *Node) runAsLeader() bool {
 		case arg := <-n.requestVoteChan:
 			n.handleRequestVote(arg)
 		case arg := <-n.appendEntriesChan:
-			n.handleAppendEntries(arg)
+			n.handleAppendEntries(arg, n.State)
 		case arg := <-n.clientOpChan:
 			clientOp(arg)
 		case arg := <-n.dumpStateChan:
