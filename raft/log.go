@@ -38,12 +38,13 @@ func (log *Log) appendAsFollower(req *pb.AppendEntriesRequest) ([]*pb.LogEntry, 
 	if req.PrevLogIndex > log.last().Index {
 		return nil, ErrLogAppendConsistency
 	}
-	// TODO: Fix the following:
 	// Something's missing here -- a follower may receive request for entries that already
 	// exist in its log. For example, in a cluster of 5 servers, server A writes log (1,1)
 	// to local as a leader, and replicates to B. (1,1) is not committed yet because it's
 	// now only on A and B. Now A crashes, and B becomes leader, B would try to replicate
 	// log (1,1) back to A.
+	// On a second thought, the above is not an issue: In this case, A would truncate the
+	// entry (1,1) after checking `PrevLogIndex` and `PrevLogTerm`, then re-apply log (1,1).
 	var overwritten []*pb.LogEntry
 	for i := len(log.entries) - 1; i >= 0; i-- {
 		if log.entries[i].Index == req.PrevLogIndex && log.entries[i].Term == req.PrevLogTerm {
