@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/fiibbb/goraft/.gen/raftpb"
+	pb "github.com/fiibbb/goraft/raftpb"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	pb "github.com/fiibbb/goraft/.gen/raftpb"
+	pb "github.com/fiibbb/goraft/raftpb"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"

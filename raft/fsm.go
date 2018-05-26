@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/fiibbb/goraft/.gen/raftpb"
+	pb "github.com/fiibbb/goraft/raftpb"
 	"google.golang.org/grpc"
 )
 

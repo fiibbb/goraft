@@ -3,7 +3,7 @@ package raft
 import (
 	"context"
 
-	pb "github.com/fiibbb/goraft/.gen/raftpb"
+	pb "github.com/fiibbb/goraft/raftpb"
 )
 
 // RequestVote simply forwards the requests to the Raft process so they can be handled in serial.
