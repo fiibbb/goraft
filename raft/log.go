@@ -140,12 +140,12 @@ func (pl *PendingLog) reject(entries []*pb.LogEntry) {
 }
 
 func mustVerifyLog(n *Node) {
-	for i, l := range n.Log.entries {
+	for i, l := range n.log.entries {
 		if l.Index != uint64(i) {
 			panic(fmt.Sprintf("%s: Log corruption: %dth entry has Index %d", n.Id, i, l.Index))
 		}
-		if i != 0 && l.Term < n.Log.entries[i-1].Term {
-			panic(fmt.Sprintf("%s: Log corruption: %dth entry has Term %d, %d-1th entry has Term %d", n.Id, i, l.Term, i, n.Log.entries[i-1].Term))
+		if i != 0 && l.Term < n.log.entries[i-1].Term {
+			panic(fmt.Sprintf("%s: Log corruption: %dth entry has Term %d, %d-1th entry has Term %d", n.Id, i, l.Term, i, n.log.entries[i-1].Term))
 		}
 	}
 }

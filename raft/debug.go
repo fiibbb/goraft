@@ -22,13 +22,12 @@ var errIntercepted = fmt.Errorf("rpc intercepted")
 
 var debugMu sync.RWMutex
 var callEnabled map[string]bool
-var showState bool
 
 func callKey(src, dst, method string) string {
 	return fmt.Sprintf("%s => %s [%s]", src, dst, method)
 }
 
-func callInfo(node *Node, src, dst, method string, req, resp interface{}) string {
+func callInfo(src, dst, method string, req, resp interface{}) string {
 	var m = jsonpb.Marshaler{EmitDefaults: true}
 	var reqMsg, respMsg proto.Message
 	var ok bool
@@ -49,9 +48,6 @@ func callInfo(node *Node, src, dst, method string, req, resp interface{}) string
 	if err != nil {
 		panic(err)
 	}
-	debugMu.Lock()
-	showStateCopy := showState
-	debugMu.Unlock()
 	if resp != nil {
 		switch method {
 		case requestVote:
@@ -70,17 +66,9 @@ func callInfo(node *Node, src, dst, method string, req, resp interface{}) string
 		if err != nil {
 			panic(err)
 		}
-		if showStateCopy {
-			return fmt.Sprintf("%s: %s => %s (%s)", callKey(src, dst, method), reqStr, respStr, dumpState(node))
-		} else {
-			return fmt.Sprintf("%s: %s => %s", callKey(src, dst, method), reqStr, respStr)
-		}
+		return fmt.Sprintf("%s: %s => %s", callKey(src, dst, method), reqStr, respStr)
 	} else {
-		if showStateCopy {
-			return fmt.Sprintf("%s: %s => intercepted (%s)", callKey(src, dst, method), reqStr, dumpState(node))
-		} else {
-			return fmt.Sprintf("%s: %s => intercepted", callKey(src, dst, method), reqStr)
-		}
+		return fmt.Sprintf("%s: %s => intercepted", callKey(src, dst, method), reqStr)
 	}
 }
 
@@ -103,11 +91,11 @@ func debugInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServ
 	if enabled || isWhitedMethod(method) {
 		resp, err := handler(ctx, req)
 		if err == nil {
-			debug("%s [--CALL--]: %s\n", ts(), callInfo(node, src, dst, method, req, resp))
+			debug("%s [--CALL--]: %s\n", ts(), callInfo(src, dst, method, req, resp))
 		}
 		return resp, err
 	} else {
-		debug("%s [--INT---]: %s\n", ts(), callInfo(node, src, dst, method, req, nil))
+		debug("%s [--INT---]: %s\n", ts(), callInfo(src, dst, method, req, nil))
 		return nil, errIntercepted
 	}
 }
@@ -170,18 +158,6 @@ func runDebugger(peers []peerArg) {
 			}
 		}
 		setCallsAndWriteBack(w, r, keys)
-	})
-	m.HandleFunc("/show-state/{enable}", func(w http.ResponseWriter, r *http.Request) {
-		debugMu.Lock()
-		defer debugMu.Unlock()
-		enable := mux.Vars(r)["enable"]
-		if enable == "e" {
-			showState = true
-			w.Write([]byte("enabled"))
-		} else {
-			showState = false
-			w.Write([]byte("disabled"))
-		}
 	})
 	m.HandleFunc("/write/{id}/{data}", func(w http.ResponseWriter, r *http.Request) {
 		for _, p := range peers {

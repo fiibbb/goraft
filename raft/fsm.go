@@ -67,13 +67,13 @@ func NewNode(
 		State:    Follower,
 		VotedFor: none,
 
-		Log:          newHeadLog(nil),
-		PendingLog:   newPendingLog(),
-		CommitIndex:  0,
-		AppliedIndex: 0,
+		log:          newHeadLog(nil),
+		pendingLog:   newPendingLog(),
+		commitIndex:  0,
+		appliedIndex: 0,
 
-		NextIndex:  nextIndex,
-		MatchIndex: matchIndex,
+		nextIndex:  nextIndex,
+		matchIndex: matchIndex,
 
 		peers: peersMap,
 
@@ -159,10 +159,10 @@ func (n *Node) handleRequestVote(arg *requestVoteArg) {
 		if n.VotedFor != none && n.VotedFor != req.CandidateId {
 			return false
 		}
-		if req.LastLogTerm < n.Log.last().Term {
+		if req.LastLogTerm < n.log.last().Term {
 			return false
 		}
-		if req.LastLogTerm == n.Log.last().Term && req.LastLogIndex < n.Log.last().Index {
+		if req.LastLogTerm == n.log.last().Term && req.LastLogIndex < n.log.last().Index {
 			return false
 		}
 		return true
@@ -208,7 +208,7 @@ func (n *Node) handleAppendEntries(arg *appendEntriesArg, state ProcessState) bo
 	}
 
 	// Append log. This may fail due to consistency check
-	overwritten, err := n.Log.appendAsFollower(arg.req)
+	overwritten, err := n.log.appendAsFollower(arg.req)
 	if err != nil {
 		arg.respChan <- &pb.AppendEntriesResponse{
 			Term:    n.Term,
@@ -218,22 +218,22 @@ func (n *Node) handleAppendEntries(arg *appendEntriesArg, state ProcessState) bo
 	}
 
 	// Reject pending log entries that were overwritten.
-	n.PendingLog.reject(overwritten)
+	n.pendingLog.reject(overwritten)
 	mustVerifyLog(n)
 
 	// If leader has a higher commitIndex, catch up to that new commitIndex
-	if arg.req.LeaderCommitIndex > n.CommitIndex {
+	if arg.req.LeaderCommitIndex > n.commitIndex {
 		var toAccept []*pb.LogEntry
 		newCommitIndex := arg.req.LeaderCommitIndex
-		if n.Log.last().Index < newCommitIndex {
-			newCommitIndex = n.Log.last().Index - 1
+		if n.log.last().Index < newCommitIndex {
+			newCommitIndex = n.log.last().Index - 1
 		}
-		for i := n.CommitIndex + 1; i <= newCommitIndex; i++ {
-			logToAccept := n.Log.get(i)
+		for i := n.commitIndex + 1; i <= newCommitIndex; i++ {
+			logToAccept := n.log.get(i)
 			toAccept = append(toAccept, logToAccept)
 		}
-		n.CommitIndex = newCommitIndex
-		n.PendingLog.accept(toAccept)
+		n.commitIndex = newCommitIndex
+		n.pendingLog.accept(toAccept)
 	}
 
 	// Write back response.
@@ -318,8 +318,8 @@ func (n *Node) runAsCandidate() bool {
 	req := &pb.RequestVoteRequest{
 		Term:         n.Term,
 		CandidateId:  n.Id,
-		LastLogTerm:  n.Log.last().Term,
-		LastLogIndex: n.Log.last().Index,
+		LastLogTerm:  n.log.last().Term,
+		LastLogIndex: n.log.last().Index,
 	}
 	for _, pArg := range n.peers {
 		go func(p *peer) {
@@ -430,11 +430,11 @@ func (n *Node) runAsCandidate() bool {
 func (n *Node) runAsLeader() bool {
 
 	// Reinitialize leader states (nextIndex, matchIndex)
-	for id := range n.NextIndex {
-		n.NextIndex[id] = n.Log.last().Index + 1
+	for id := range n.nextIndex {
+		n.nextIndex[id] = n.log.last().Index + 1
 	}
-	for id := range n.MatchIndex {
-		n.MatchIndex[id] = 0
+	for id := range n.matchIndex {
+		n.matchIndex[id] = 0
 	}
 
 	// Sync primitives for `broadcast` and `broadcastResp`
@@ -519,10 +519,10 @@ func (n *Node) runAsLeader() bool {
 			}(n.peers[id], &pb.AppendEntriesRequest{
 				Term:              n.Term,
 				LeaderId:          n.Id,
-				PrevLogTerm:       n.Log.get(n.NextIndex[id] - 1).Term,
-				PrevLogIndex:      n.Log.get(n.NextIndex[id] - 1).Index,
-				LeaderCommitIndex: n.CommitIndex,
-				Entries:           n.Log.tail(n.NextIndex[id]),
+				PrevLogTerm:       n.log.get(n.nextIndex[id] - 1).Term,
+				PrevLogIndex:      n.log.get(n.nextIndex[id] - 1).Index,
+				LeaderCommitIndex: n.commitIndex,
+				Entries:           n.log.tail(n.nextIndex[id]),
 			})
 		}
 	}
@@ -547,30 +547,30 @@ func (n *Node) runAsLeader() bool {
 					return
 				}
 				lastEntryInReq := resp.req.Entries[len(resp.req.Entries)-1]
-				n.NextIndex[resp.peerId] = lastEntryInReq.Index + 1
-				n.MatchIndex[resp.peerId] = lastEntryInReq.Index
+				n.nextIndex[resp.peerId] = lastEntryInReq.Index + 1
+				n.matchIndex[resp.peerId] = lastEntryInReq.Index
 				// Update commitIndex
 				var toAccept []*pb.LogEntry
-				for i := n.CommitIndex + 1; i <= n.Log.last().Index; i++ {
+				for i := n.commitIndex + 1; i <= n.log.last().Index; i++ {
 					// If log[i].Term == rs.term AND majority matchIndex >= i
 					// then update commitIndex to `i`.
-					if n.Log.get(i).Term == n.Term {
+					if n.log.get(i).Term == n.Term {
 						count := 0
-						for id := range n.MatchIndex {
-							if n.MatchIndex[id] >= i {
+						for id := range n.matchIndex {
+							if n.matchIndex[id] >= i {
 								count++
 							}
 						}
 						if count > len(n.peers)/2 {
-							n.CommitIndex = i
-							toAccept = append(toAccept, n.Log.get(i))
+							n.commitIndex = i
+							toAccept = append(toAccept, n.log.get(i))
 						}
 					}
 				}
 				// Accept the newly committed entries.
-				n.PendingLog.accept(toAccept)
+				n.pendingLog.accept(toAccept)
 			} else { // Decrement nextIndex and wait for next retry
-				n.NextIndex[resp.peerId]--
+				n.nextIndex[resp.peerId]--
 			}
 		}
 	}
@@ -578,10 +578,10 @@ func (n *Node) runAsLeader() bool {
 	// clientOp handles `ClientOp` sent from clients.
 	var clientOp = func(arg *clientOpArg) {
 		// Append to local log
-		logEntry := n.Log.appendAsLeader(n.Term, arg.req.Data)
+		logEntry := n.log.appendAsLeader(n.Term, arg.req.Data)
 		// Add a corresponding entry to pending ops.
 		pendingLogEntry := newPendingLogEntry(logEntry)
-		n.PendingLog.add(pendingLogEntry)
+		n.pendingLog.add(pendingLogEntry)
 		// Wait for the log entry to be committed.
 		go func() {
 			select {
@@ -592,7 +592,7 @@ func (n *Node) runAsLeader() bool {
 			}
 		}()
 		mustVerifyLog(n)
-		debug("%s [--LOG---]: %s received ClientOp, finished with log %s\n", ts(), n.Id, n.Log.string())
+		debug("%s [--LOG---]: %s received ClientOp, finished with log %s\n", ts(), n.Id, n.log.string())
 	}
 
 	// Run event loop until state changes.
