@@ -2,10 +2,7 @@ package raft
 
 import (
 	"fmt"
-	"strings"
 	"time"
-
-	pb "github.com/fiibbb/goraft/.gen/raftpb"
 )
 
 func debug(s string, a ...interface{}) {
@@ -30,12 +27,4 @@ func fmtState(s ProcessState) string {
 		return "LEADER"
 	}
 	panic("unrecognized state")
-}
-
-func fmtLog(log []*pb.LogEntry) string {
-	var es []string
-	for _, l := range log {
-		es = append(es, fmt.Sprintf("{t%d,i%d:%s}", l.Term, l.Index, l.Data))
-	}
-	return fmt.Sprintf("[ %s ]", strings.Join(es, " > "))
 }

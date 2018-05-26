@@ -38,11 +38,11 @@ message AppendEntriesResponse {
 message LogEntry {
   uint64 term = 1;
   uint64 index = 2;
-  string data = 3;
+  bytes data = 3;
 }
 
 message ClientOpRequest {
-  string data = 1;
+  bytes data = 1;
 }
 
 message ClientOpResponse {

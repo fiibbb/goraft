@@ -67,7 +67,7 @@ func NewNode(
 		State:    Follower,
 		VotedFor: none,
 
-		Log:          []*pb.LogEntry{{Term: 0, Index: 0, Data: "initialize"}},
+		Log:          newHeadLog(nil),
 		CommitIndex:  0,
 		AppliedIndex: 0,
 
@@ -158,10 +158,10 @@ func (n *Node) handleRequestVote(arg *requestVoteArg) {
 		if n.VotedFor != none && n.VotedFor != req.CandidateId {
 			return false
 		}
-		if req.LastLogTerm < lastLog(n).Term {
+		if req.LastLogTerm < n.Log.last().Term {
 			return false
 		}
-		if req.LastLogTerm == lastLog(n).Term && req.LastLogIndex < lastLogGlobalIndex(n) {
+		if req.LastLogTerm == n.Log.last().Term && req.LastLogIndex < n.Log.last().Index {
 			return false
 		}
 		return true
@@ -215,31 +215,21 @@ func (n *Node) handleAppendEntries(arg *appendEntriesArg, state ProcessState) bo
 		return true
 	}
 
-	// Consistency check: Reject request with non-succeeding entry
-	idx, err := findLog(n, arg.req.PrevLogTerm, arg.req.PrevLogIndex)
-	if !(arg.req.Term > lastLog(n).Term) { // Request does not have a higher term
-		if err != nil {
-			arg.respChan <- &pb.AppendEntriesResponse{
-				Term:    n.Term,
-				Success: false,
-			}
-			// TODO: Check if we should return true here instead -- a rejected request is still a valid heartbeat.
-			return true
+	// Append log. This may fail due to consistency check
+	if err := n.Log.appendAsFollower(arg.req); err != nil {
+		arg.respChan <- &pb.AppendEntriesResponse{
+			Term:    n.Term,
+			Success: false,
 		}
+		return true // A rejected request is still a health check
 	}
-
-	// Trim off log after `PrevLogTerm/PrevLogIndex`.
-	n.Log = n.Log[:idx+1]
-
-	// Append new log entries.
-	n.Log = append(n.Log, arg.req.Entries...)
-	verifyLog(n.Log)
+	mustVerifyLog(n)
 
 	// If leader has a higher commitIndex, catch up to that new commitIndex
 	if arg.req.LeaderCommitIndex > n.CommitIndex {
 		newCommitIndex := n.CommitIndex
-		if uint64(len(n.Log)-1) < newCommitIndex {
-			newCommitIndex = uint64(len(n.Log) - 1)
+		if n.Log.last().Index < newCommitIndex {
+			newCommitIndex = n.Log.last().Index - 1
 		}
 		n.CommitIndex = newCommitIndex
 	}
@@ -326,8 +316,8 @@ func (n *Node) runAsCandidate() bool {
 	req := &pb.RequestVoteRequest{
 		Term:         n.Term,
 		CandidateId:  n.Id,
-		LastLogTerm:  lastLog(n).Term,
-		LastLogIndex: lastLog(n).Index,
+		LastLogTerm:  n.Log.last().Term,
+		LastLogIndex: n.Log.last().Index,
 	}
 	for _, pArg := range n.peers {
 		go func(p *peer) {
@@ -372,7 +362,7 @@ func (n *Node) runAsCandidate() bool {
 
 	// At this point we have fanned out `RequestVote` call to all peers, we need to handle three things:
 	// - receive response from the fanned out `RequestVote` calls
-	//   - if recieve majority vote, then turn to leader here.
+	//   - if receive majority vote, then turn to leader here.
 	// - receive RequestVote call.
 	// - receive AppendEntries call.
 	// Note that we can not block on waiting for response of our own `RequestVote` calls and not handle
@@ -439,7 +429,7 @@ func (n *Node) runAsLeader() bool {
 
 	// Reinitialize leader states (nextIndex, matchIndex)
 	for id := range n.NextIndex {
-		n.NextIndex[id] = uint64(len(n.Log))
+		n.NextIndex[id] = n.Log.last().Index + 1
 	}
 	for id := range n.MatchIndex {
 		n.MatchIndex[id] = 0
@@ -453,7 +443,7 @@ func (n *Node) runAsLeader() bool {
 	// broadcast sends `AppendEntriesRequest`s to all peers, including both empty (heartbeat) and non-empty ones.
 	var broadcast = func() {
 		for id := range n.peers {
-			go func(idCopy string, logLen uint64, reqCopy *pb.AppendEntriesRequest, p *peer) {
+			go func(peerId string, req *pb.AppendEntriesRequest, p *peer) {
 				// If there's no fanout routine running for this peer, set `isRunning` to true and `runningTerm` to
 				// the current request's Term.
 				// If there's already a fanout routine running for this peer, but for an older term, bump the term
@@ -461,9 +451,9 @@ func (n *Node) runAsLeader() bool {
 				p.fanout.Lock()
 				if !p.fanout.isRunning {
 					p.fanout.isRunning = true
-					p.fanout.runningTerm = reqCopy.Term
-				} else if p.fanout.isRunning && reqCopy.Term > p.fanout.runningTerm {
-					p.fanout.runningTerm = reqCopy.Term
+					p.fanout.runningTerm = req.Term
+				} else if p.fanout.isRunning && req.Term > p.fanout.runningTerm {
+					p.fanout.runningTerm = req.Term
 				} else { // p.fanOut.isRunning && reqCopy.Term <= p.fanOut.runningTerm
 					p.fanout.Unlock()
 					return
@@ -471,7 +461,7 @@ func (n *Node) runAsLeader() bool {
 				p.fanout.Unlock()
 				defer func() {
 					p.fanout.Lock()
-					if p.fanout.runningTerm == reqCopy.Term {
+					if p.fanout.runningTerm == req.Term {
 						// Only set `isRunning` to false if the Term remains the same. If the term has changed, it means
 						// another routine with higher term has started.
 						p.fanout.isRunning = false
@@ -490,14 +480,14 @@ func (n *Node) runAsLeader() bool {
 					workMu.Unlock()
 					// Check if there's a new routine running (which must have a higher term). If so, bail.
 					p.fanout.Lock()
-					if p.fanout.runningTerm > reqCopy.Term {
+					if p.fanout.runningTerm > req.Term {
 						p.fanout.Unlock()
 						return
 					}
 					p.fanout.Unlock()
 					// Send request.
 					ctx, cancel := context.WithTimeout(context.Background(), n.rpcTimeout)
-					resp, err := p.client.AppendEntries(withSrc(ctx, n.Id), reqCopy)
+					resp, err := p.client.AppendEntries(withSrc(ctx, n.Id), req)
 					// Again, Check if we are still running as leader, if not, don't bother doing anything.
 					workMu.Lock()
 					if demoted {
@@ -516,21 +506,21 @@ func (n *Node) runAsLeader() bool {
 					}
 					// Send back response.
 					appendEntriesRespChan <- &appendEntriesRespBundle{
-						resp:           resp,
-						peerId:         idCopy,
-						updateLogIndex: logLen,
+						peerId: peerId,
+						req:    req,
+						resp:   resp,
 					}
 					workMu.Unlock()
 					cancel()
 					return
 				}
-			}(id, uint64(len(n.Log)), &pb.AppendEntriesRequest{
+			}(id, &pb.AppendEntriesRequest{
 				Term:              n.Term,
 				LeaderId:          n.Id,
-				PrevLogTerm:       lastLog(n).Term,
-				PrevLogIndex:      lastLog(n).Index,
+				PrevLogTerm:       n.Log.last().Term,
+				PrevLogIndex:      n.Log.last().Index,
 				LeaderCommitIndex: n.CommitIndex,
-				Entries:           n.Log[n.NextIndex[id]:],
+				Entries:           n.Log.tail(n.NextIndex[id]),
 			}, n.peers[id])
 		}
 	}
@@ -550,14 +540,18 @@ func (n *Node) runAsLeader() bool {
 			n.State = Follower
 			n.VotedFor = none
 		} else { // resp.resp.Term == rs.Term
-			if resp.resp.Success { // Update nextIndex and matchIndex for the peer
-				n.NextIndex[resp.peerId] = resp.updateLogIndex
-				n.MatchIndex[resp.peerId] = resp.updateLogIndex
+			if resp.resp.Success { // Update nextIndex and matchIndex for the peer.
+				if len(resp.req.Entries) == 0 { // Nothing to be done for a successful heartbeat request.
+					return
+				}
+				lastEntryInReq := resp.req.Entries[len(resp.req.Entries)-1]
+				n.NextIndex[resp.peerId] = lastEntryInReq.Index + 1
+				n.MatchIndex[resp.peerId] = lastEntryInReq.Index
 				// Update commitIndex
-				for i := n.CommitIndex; i < uint64(len(n.Log)); i++ {
+				for i := n.CommitIndex + 1; i <= n.Log.last().Index; i++ {
 					// If log[i].Term == rs.term AND majority matchIndex >= i
 					// then update commitIndex to `i`.
-					if n.Log[i].Term == n.Term {
+					if n.Log.get(i).Term == n.Term {
 						count := 0
 						for id := range n.MatchIndex {
 							if n.MatchIndex[id] >= i {
@@ -570,7 +564,7 @@ func (n *Node) runAsLeader() bool {
 					}
 				}
 			} else { // Decrement nextIndex and wait for next retry
-				n.NextIndex[resp.peerId] = n.NextIndex[resp.peerId] - 1
+				n.NextIndex[resp.peerId]--
 			}
 		}
 	}
@@ -578,20 +572,9 @@ func (n *Node) runAsLeader() bool {
 	// clientOp handles `ClientOp` sent from clients.
 	var clientOp = func(arg *clientOpArg) {
 		// Append to local log.
-		var index uint64
-		lastLogEntry := lastLog(n)
-		if lastLogEntry.Term == n.Term {
-			index = lastLogEntry.Index + 1
-		} else {
-			index = 0
-		}
-		newLogEntry := &pb.LogEntry{
-			Term:  n.Term,
-			Index: index,
-			Data:  arg.req.Data,
-		}
-		n.Log = append(n.Log, newLogEntry)
-		debug("%s [--LOG---]: %s received ClientOp, finished with log %s\n", ts(), n.Id, fmtLog(n.Log))
+		n.Log.appendAsLeader(n.Term, arg.req.Data)
+		mustVerifyLog(n)
+		debug("%s [--LOG---]: %s received ClientOp, finished with log %s\n", ts(), n.Id, n.Log.string())
 		// TODO: Wait until log is applied to state machine to reply
 		// Note that this is a bit tricky. I'm not sure I fully understand how long
 		// I'm supposed to "wait" -- Consider the case where the current leader

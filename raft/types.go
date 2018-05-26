@@ -8,6 +8,60 @@ import (
 	"google.golang.org/grpc"
 )
 
+type ProcessState int
+
+const (
+	Follower ProcessState = iota
+	Candidate
+	Leader
+)
+
+type Log struct {
+	entries []*pb.LogEntry
+}
+
+type Node struct {
+	// raft states
+	Id       string
+	Term     uint64
+	State    ProcessState
+	VotedFor string
+
+	// data states
+	Log          *Log
+	CommitIndex  uint64
+	AppliedIndex uint64
+
+	// leader states, reinitialize these upon election
+	NextIndex  map[string]uint64 // peer id -> next log entry to send to that peer (initialized to leader last log index + 1)
+	MatchIndex map[string]uint64 // peer id -> highest log entry index known to be replicated to that peer (initialized to 0, increases monotonically)
+
+	// peer state
+	peers map[string]*peer
+
+	// server state
+	addr   string
+	server *grpc.Server
+
+	// channels for rpc
+	requestVoteChan   chan *requestVoteArg
+	appendEntriesChan chan *appendEntriesArg
+	clientOpChan      chan *clientOpArg
+	dumpStateChan     chan *dumpStateArg
+
+	// timers
+	minElectionTimeout time.Duration
+	electionTimeout    time.Duration
+	heartbeatPeriod    time.Duration
+	rpcTimeout         time.Duration
+	maxRPCBackOff      time.Duration
+
+	// life cycle
+	clock    clock
+	started  bool
+	stopChan chan interface{}
+}
+
 type requestVoteArg struct {
 	req      *pb.RequestVoteRequest
 	respChan chan *pb.RequestVoteResponse
@@ -51,49 +105,7 @@ type peerArg struct {
 }
 
 type appendEntriesRespBundle struct {
-	resp           *pb.AppendEntriesResponse
-	peerId         string
-	updateLogIndex uint64
-}
-
-type Node struct {
-	// raft states
-	Id       string
-	Term     uint64
-	State    ProcessState
-	VotedFor string
-
-	// data states
-	Log          []*pb.LogEntry
-	CommitIndex  uint64
-	AppliedIndex uint64
-
-	// leader states, reinitialize these upon election
-	NextIndex  map[string]uint64 // peer id -> next log entry to send to that peer (initialized to leader last log index + 1)
-	MatchIndex map[string]uint64 // peer id -> next index of highest log entry known to be replicated to that peer (initialized to 0, increases monotonically)
-
-	// peer state
-	peers map[string]*peer
-
-	// server state
-	addr   string
-	server *grpc.Server
-
-	// channels for rpc
-	requestVoteChan   chan *requestVoteArg
-	appendEntriesChan chan *appendEntriesArg
-	clientOpChan      chan *clientOpArg
-	dumpStateChan     chan *dumpStateArg
-
-	// timers
-	minElectionTimeout time.Duration
-	electionTimeout    time.Duration
-	heartbeatPeriod    time.Duration
-	rpcTimeout         time.Duration
-	maxRPCBackOff      time.Duration
-
-	// life cycle
-	clock    clock
-	started  bool
-	stopChan chan interface{}
+	peerId string
+	req    *pb.AppendEntriesRequest
+	resp   *pb.AppendEntriesResponse
 }

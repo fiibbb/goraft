@@ -5,7 +5,10 @@ import (
 )
 
 var ErrInvalidID = fmt.Errorf("invalid ID")
-var ErrLogNotFound = fmt.Errorf("log not found")
+
+var ErrLogAppendConsistency = fmt.Errorf("inconsistent log append request")
+var ErrLogCorruption = fmt.Errorf("log corruption")
+
 var ErrCanNotHandleClientOpFollower = fmt.Errorf("node (follower) can not handle operation")
 var ErrCanNotHandleClientOpCandidate = fmt.Errorf("node (candidate) can not handle operation")
 

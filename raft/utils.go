@@ -6,29 +6,11 @@ import (
 	"math/rand"
 	"time"
 
-	pb "github.com/fiibbb/goraft/.gen/raftpb"
 	"google.golang.org/grpc/metadata"
 )
 
 func randElectionTimeout(minElectionTimeout time.Duration) time.Duration {
 	return time.Duration(int64(minElectionTimeout) + rand.Int63n(int64(minElectionTimeout)))
-}
-
-func lastLog(n *Node) *pb.LogEntry {
-	return n.Log[len(n.Log)-1]
-}
-
-func lastLogGlobalIndex(n *Node) uint64 {
-	return uint64(len(n.Log) - 1)
-}
-
-func findLog(n *Node, term uint64, index uint64) (uint64, error) {
-	for i := len(n.Log) - 1; i >= 0; i-- {
-		if n.Log[i].Term == term && n.Log[i].Index == index {
-			return uint64(i), nil
-		}
-	}
-	return 0, ErrLogNotFound
 }
 
 func expBackOff(t *time.Duration, max time.Duration) {
@@ -63,8 +45,4 @@ func dumpState(n *Node) string {
 		debug("failed to dump state")
 	}
 	return string(s)
-}
-
-func verifyLog([]*pb.LogEntry) {
-	// TODO: NYI
 }

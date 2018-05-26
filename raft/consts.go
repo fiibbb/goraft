@@ -4,14 +4,6 @@ import (
 	"time"
 )
 
-type ProcessState int
-
-const (
-	Follower ProcessState = iota
-	Candidate
-	Leader
-)
-
 const source = "source"
 const none = "none"
 const initialBackOff = time.Millisecond * 100

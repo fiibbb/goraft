@@ -187,7 +187,7 @@ func runDebugger(peers []peerArg) {
 		for _, p := range peers {
 			if p.id == mux.Vars(r)["id"] {
 				data := mux.Vars(r)["data"]
-				err := ClientOp(data, p.addr)
+				err := ClientOp([]byte(data), p.addr)
 				if err != nil {
 					w.Write([]byte(err.Error()))
 				} else {
@@ -235,7 +235,7 @@ func RunBasicEnsemble() {
 	runDebugger(peers)
 }
 
-func ClientOp(data string, addr string) error {
+func ClientOp(data []byte, addr string) error {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
 		return err
