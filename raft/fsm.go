@@ -156,6 +156,22 @@ func (n *Node) handleRequestVote(arg *requestVoteArg) {
 		n.VotedFor = none
 	}
 
+	// This logic makes sure that a candidate without all the committed log
+	// entries do not get the vote.
+	// Example edge case:
+	// I: 1,2,3,4,5
+	// A: 1,1,1,2   [FOL](grant)
+	// B: 1,1,1,4   [CAN](get elected)
+	// C: 1,1,1,3   [FOL](grant)
+	// D: 1,1,1,3   [OFFLINE]
+	// E: 1,1,1,3   [OFFLINE]
+	// Potential problem: In this case, B would get elected, and log (3,4)
+	// would get overwritten once B starts to replicate its log. But
+	// log (3,4) is already committed.
+	// Correction: This scenario can not happen. For B to have log (4,4), it
+	// must have been elected as leader in term 4, receiving majority votes
+	// from term 3 servers. CDE would not have voted because their log were
+	// more up-to-date.
 	var shouldVote = func(req *pb.RequestVoteRequest) bool {
 		if n.VotedFor != none && n.VotedFor != req.CandidateId {
 			return false
