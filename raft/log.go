@@ -34,26 +34,38 @@ func (log *Log) get(index uint64) *pb.LogEntry {
 	return nil
 }
 
-func (log *Log) appendAsFollower(req *pb.AppendEntriesRequest) error {
+func (log *Log) appendAsFollower(req *pb.AppendEntriesRequest) ([]*pb.LogEntry, error) {
 	if req.PrevLogIndex > log.last().Index {
-		return ErrLogAppendConsistency
+		return nil, ErrLogAppendConsistency
 	}
+	// TODO: Fix the following:
+	// Something's missing here -- a follower may receive request for entries that already
+	// exist in its log. For example, in a cluster of 5 servers, server A writes log (1,1)
+	// to local as a leader, and replicates to B. (1,1) is not committed yet because it's
+	// now only on A and B. Now A crashes, and B becomes leader, B would try to replicate
+	// log (1,1) back to A.
+	var overwritten []*pb.LogEntry
 	for i := len(log.entries) - 1; i >= 0; i-- {
 		if log.entries[i].Index == req.PrevLogIndex && log.entries[i].Term == req.PrevLogTerm {
+			for j := i + 1; j < len(log.entries); j++ {
+				overwritten = append(overwritten, log.entries[j])
+			}
 			log.entries = log.entries[:i+1]
 			log.entries = append(log.entries, req.Entries...)
-			return nil
+			return overwritten, nil
 		}
 	}
 	panic(ErrLogCorruption)
 }
 
-func (log *Log) appendAsLeader(term uint64, data []byte) {
-	log.entries = append(log.entries, &pb.LogEntry{
+func (log *Log) appendAsLeader(term uint64, data []byte) *pb.LogEntry {
+	newEntry := &pb.LogEntry{
 		Term:  term,
 		Index: log.last().Index + 1,
 		Data:  data,
-	})
+	}
+	log.entries = append(log.entries, newEntry)
+	return newEntry
 }
 
 func copyLogEntry(e *pb.LogEntry) *pb.LogEntry {
@@ -87,6 +99,44 @@ func (log *Log) string() string {
 		es = append(es, fmt.Sprintf("{t%d,i%d:%s}", l.Term, l.Index, string(l.Data)))
 	}
 	return fmt.Sprintf("[ %s ]", strings.Join(es, " > "))
+}
+
+func newPendingLog() *PendingLog {
+	return &PendingLog{entries: make(map[*pb.LogEntry]*pendingLogEntry)}
+}
+
+func newPendingLogEntry(entry *pb.LogEntry) *pendingLogEntry {
+	return &pendingLogEntry{
+		entry:   entry,
+		success: make(chan interface{}),
+		failure: make(chan interface{}),
+	}
+}
+
+func (pl *PendingLog) add(entry *pendingLogEntry) {
+	pl.entries[entry.entry] = entry
+}
+
+func (pl *PendingLog) get(entry *pb.LogEntry) *pendingLogEntry {
+	return pl.entries[entry]
+}
+
+func (pl *PendingLog) accept(entries []*pb.LogEntry) {
+	for _, e := range entries {
+		if _, exists := pl.entries[e]; exists {
+			pl.entries[e].success <- 1
+			delete(pl.entries, e)
+		}
+	}
+}
+
+func (pl *PendingLog) reject(entries []*pb.LogEntry) {
+	for _, e := range entries {
+		if _, exists := pl.entries[e]; exists {
+			pl.entries[e].failure <- 1
+			delete(pl.entries, e)
+		}
+	}
 }
 
 func mustVerifyLog(n *Node) {

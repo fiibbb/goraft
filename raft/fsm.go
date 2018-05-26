@@ -68,6 +68,7 @@ func NewNode(
 		VotedFor: none,
 
 		Log:          newHeadLog(nil),
+		PendingLog:   newPendingLog(),
 		CommitIndex:  0,
 		AppliedIndex: 0,
 
@@ -206,32 +207,33 @@ func (n *Node) handleAppendEntries(arg *appendEntriesArg, state ProcessState) bo
 		n.State = Follower
 	}
 
-	// Handle heartbeat
-	if len(arg.req.Entries) == 0 {
-		arg.respChan <- &pb.AppendEntriesResponse{
-			Term:    n.Term,
-			Success: true,
-		}
-		return true
-	}
-
 	// Append log. This may fail due to consistency check
-	if err := n.Log.appendAsFollower(arg.req); err != nil {
+	overwritten, err := n.Log.appendAsFollower(arg.req)
+	if err != nil {
 		arg.respChan <- &pb.AppendEntriesResponse{
 			Term:    n.Term,
 			Success: false,
 		}
 		return true // A rejected request is still a health check
 	}
+
+	// Reject pending log entries that were overwritten.
+	n.PendingLog.reject(overwritten)
 	mustVerifyLog(n)
 
 	// If leader has a higher commitIndex, catch up to that new commitIndex
 	if arg.req.LeaderCommitIndex > n.CommitIndex {
-		newCommitIndex := n.CommitIndex
+		var toAccept []*pb.LogEntry
+		newCommitIndex := arg.req.LeaderCommitIndex
 		if n.Log.last().Index < newCommitIndex {
 			newCommitIndex = n.Log.last().Index - 1
 		}
+		for i := n.CommitIndex + 1; i <= newCommitIndex; i++ {
+			logToAccept := n.Log.get(i)
+			toAccept = append(toAccept, logToAccept)
+		}
 		n.CommitIndex = newCommitIndex
+		n.PendingLog.accept(toAccept)
 	}
 
 	// Write back response.
@@ -548,6 +550,7 @@ func (n *Node) runAsLeader() bool {
 				n.NextIndex[resp.peerId] = lastEntryInReq.Index + 1
 				n.MatchIndex[resp.peerId] = lastEntryInReq.Index
 				// Update commitIndex
+				var toAccept []*pb.LogEntry
 				for i := n.CommitIndex + 1; i <= n.Log.last().Index; i++ {
 					// If log[i].Term == rs.term AND majority matchIndex >= i
 					// then update commitIndex to `i`.
@@ -560,9 +563,12 @@ func (n *Node) runAsLeader() bool {
 						}
 						if count > len(n.peers)/2 {
 							n.CommitIndex = i
+							toAccept = append(toAccept, n.Log.get(i))
 						}
 					}
 				}
+				// Accept the newly committed entries.
+				n.PendingLog.accept(toAccept)
 			} else { // Decrement nextIndex and wait for next retry
 				n.NextIndex[resp.peerId]--
 			}
@@ -571,16 +577,22 @@ func (n *Node) runAsLeader() bool {
 
 	// clientOp handles `ClientOp` sent from clients.
 	var clientOp = func(arg *clientOpArg) {
-		// Append to local log.
-		n.Log.appendAsLeader(n.Term, arg.req.Data)
+		// Append to local log
+		logEntry := n.Log.appendAsLeader(n.Term, arg.req.Data)
+		// Add a corresponding entry to pending ops.
+		pendingLogEntry := newPendingLogEntry(logEntry)
+		n.PendingLog.add(pendingLogEntry)
+		// Wait for the log entry to be committed.
+		go func() {
+			select {
+			case <-pendingLogEntry.success:
+				arg.respChan <- &pb.ClientOpResponse{}
+			case <-pendingLogEntry.failure:
+				arg.errChan <- ErrClientOpFailure
+			}
+		}()
 		mustVerifyLog(n)
 		debug("%s [--LOG---]: %s received ClientOp, finished with log %s\n", ts(), n.Id, n.Log.string())
-		// TODO: Wait until log is applied to state machine to reply
-		// Note that this is a bit tricky. I'm not sure I fully understand how long
-		// I'm supposed to "wait" -- Consider the case where the current leader
-		// gets demoted to a follower and has the log overwritten. Seems like in that
-		// case we should get notified here and reply error to indicate that the
-		// client operation failed.
 	}
 
 	// Run event loop until state changes.
@@ -599,6 +611,7 @@ func (n *Node) runAsLeader() bool {
 			n.handleAppendEntries(arg, n.State)
 		case arg := <-n.clientOpChan:
 			clientOp(arg)
+			broadcast()
 		case arg := <-n.dumpStateChan:
 			arg.respChan <- &pb.DumpStateResponse{State: dumpState(n)}
 		case <-n.stopChan:

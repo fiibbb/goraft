@@ -20,6 +20,10 @@ type Log struct {
 	entries []*pb.LogEntry
 }
 
+type PendingLog struct {
+	entries map[*pb.LogEntry]*pendingLogEntry
+}
+
 type Node struct {
 	// raft states
 	Id       string
@@ -29,6 +33,7 @@ type Node struct {
 
 	// data states
 	Log          *Log
+	PendingLog   *PendingLog
 	CommitIndex  uint64
 	AppliedIndex uint64
 
@@ -62,6 +67,36 @@ type Node struct {
 	stopChan chan interface{}
 }
 
+type fanoutStatus struct {
+	sync.RWMutex
+	isRunning   bool
+	runningTerm uint64
+}
+
+type pendingLogEntry struct {
+	entry   *pb.LogEntry
+	success chan interface{}
+	failure chan interface{}
+}
+
+type peer struct {
+	id     string
+	addr   string
+	client pb.RaftClient
+	fanout *fanoutStatus
+}
+
+type peerArg struct {
+	id   string
+	addr string
+}
+
+type appendEntriesRespBundle struct {
+	peerId string
+	req    *pb.AppendEntriesRequest
+	resp   *pb.AppendEntriesResponse
+}
+
 type requestVoteArg struct {
 	req      *pb.RequestVoteRequest
 	respChan chan *pb.RequestVoteResponse
@@ -84,28 +119,4 @@ type dumpStateArg struct {
 	req      *pb.DumpStateRequest
 	respChan chan *pb.DumpStateResponse
 	errChan  chan error
-}
-
-type fanoutStatus struct {
-	sync.RWMutex
-	isRunning   bool
-	runningTerm uint64
-}
-
-type peer struct {
-	id     string
-	addr   string
-	client pb.RaftClient
-	fanout *fanoutStatus
-}
-
-type peerArg struct {
-	id   string
-	addr string
-}
-
-type appendEntriesRespBundle struct {
-	peerId string
-	req    *pb.AppendEntriesRequest
-	resp   *pb.AppendEntriesResponse
 }
