@@ -46,3 +46,7 @@ func dumpState(n *Node) string {
 	}
 	return string(s)
 }
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
