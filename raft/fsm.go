@@ -569,6 +569,13 @@ func (n *Node) runAsLeader() bool {
 				// Update commitIndex
 				var toAccept []*pb.LogEntry
 				for i := n.commitIndex + 1; i <= n.log.last().Index; i++ {
+					// As described in https://raft.github.io/raft.pdf section 5.4.2, the following
+					// update commitIndex logic only works for log entries of the current term. A leader
+					// can not safely assume a log entries from previous terms are committed, even if
+					// the entry is replicated on majority of servers.
+					// As a result, we only update commitIndex using counting replicas for logs from
+					// current terms. Older logs are committed automatically when a current term log is
+					// committed.
 					// If log[i].Term == rs.term AND majority matchIndex >= i
 					// then update commitIndex to `i`.
 					if n.log.get(i).Term == n.Term {
