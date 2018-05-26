@@ -36,8 +36,8 @@ func callInfo(src, dst, method string, req, resp interface{}) string {
 		reqMsg, ok = req.(*pb.RequestVoteRequest)
 	case appendEntries:
 		reqMsg, ok = req.(*pb.AppendEntriesRequest)
-	case clientOp:
-		reqMsg, ok = req.(*pb.ClientOpRequest)
+	case write:
+		reqMsg, ok = req.(*pb.WriteRequest)
 	case dumpState:
 		reqMsg, ok = req.(*pb.DumpStateRequest)
 	default:
@@ -56,8 +56,8 @@ func callInfo(src, dst, method string, req, resp interface{}) string {
 			respMsg, ok = resp.(*pb.RequestVoteResponse)
 		case appendEntries:
 			respMsg, ok = resp.(*pb.AppendEntriesResponse)
-		case clientOp:
-			respMsg, ok = resp.(*pb.ClientOpResponse)
+		case write:
+			respMsg, ok = resp.(*pb.WriteResponse)
 		case dumpState:
 			respMsg, ok = resp.(*pb.DumpStateResponse)
 		default:
@@ -77,7 +77,7 @@ func callInfo(src, dst, method string, req, resp interface{}) string {
 }
 
 func isWhitedMethod(method string) bool {
-	return method == clientOp || method == dumpState
+	return method == write || method == dumpState
 }
 
 func debugInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -167,7 +167,7 @@ func runDebugger(peers []peerArg) {
 		for _, p := range peers {
 			if p.id == mux.Vars(r)["id"] {
 				data := mux.Vars(r)["data"]
-				err := ClientOp([]byte(data), p.addr)
+				err := Write([]byte(data), p.addr)
 				if err != nil {
 					w.Write([]byte(err.Error()))
 				} else {
@@ -242,10 +242,10 @@ func DumpState(addr string) string {
 	return resp.State
 }
 
-func ClientOp(data []byte, addr string) error {
+func Write(data []byte, addr string) error {
 	var err error
 	withClient(addr, func(client pb.RaftClient) {
-		_, err = client.ClientOp(context.Background(), &pb.ClientOpRequest{Data: data})
+		_, err = client.Write(context.Background(), &pb.WriteRequest{Data: data})
 	})
 	return err
 }

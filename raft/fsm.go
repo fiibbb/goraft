@@ -82,7 +82,7 @@ func NewNode(
 
 		requestVoteChan:   make(chan *requestVoteArg),
 		appendEntriesChan: make(chan *appendEntriesArg),
-		clientOpChan:      make(chan *clientOpArg),
+		writeChan:         make(chan *writeArg),
 		dumpStateChan:     make(chan *dumpStateArg),
 
 		minElectionTimeout: minElectionTimeout,
@@ -289,8 +289,8 @@ func (n *Node) runAsFollower() bool {
 				electionTimer.Stop()
 				electionTimer = nil
 			}
-		case arg := <-n.clientOpChan:
-			arg.errChan <- ErrCanNotHandleClientOpFollower
+		case arg := <-n.writeChan:
+			arg.errChan <- ErrCanNotHandleWriteFollower
 		case arg := <-n.dumpStateChan:
 			arg.respChan <- &pb.DumpStateResponse{State: fmtNode(n)}
 		case <-n.stopChan:
@@ -396,8 +396,8 @@ func (n *Node) runAsCandidate() bool {
 			n.handleRequestVote(arg)
 		case arg := <-n.appendEntriesChan:
 			n.handleAppendEntries(arg, n.State)
-		case arg := <-n.clientOpChan:
-			arg.errChan <- ErrCanNotHandleClientOpCandidate
+		case arg := <-n.writeChan:
+			arg.errChan <- ErrCanNotHandleWriteCandidate
 		case arg := <-n.dumpStateChan:
 			arg.respChan <- &pb.DumpStateResponse{State: fmtNode(n)}
 		case <-n.stopChan:
@@ -599,8 +599,8 @@ func (n *Node) runAsLeader() bool {
 		}
 	}
 
-	// clientOp handles `ClientOp` sent from clients.
-	var clientOp = func(arg *clientOpArg) {
+	// write handles `WriteRequest` sent from clients.
+	var write = func(arg *writeArg) {
 		// Append to local log
 		logEntry := n.log.appendAsLeader(n.Term, arg.req.Data)
 		// Add a corresponding entry to pending ops.
@@ -610,13 +610,13 @@ func (n *Node) runAsLeader() bool {
 		go func() {
 			select {
 			case <-pendingLogEntry.success:
-				arg.respChan <- &pb.ClientOpResponse{}
+				arg.respChan <- &pb.WriteResponse{}
 			case <-pendingLogEntry.failure:
-				arg.errChan <- ErrClientOpFailure
+				arg.errChan <- ErrWriteFailure
 			}
 		}()
 		mustVerifyLog(n)
-		debug("%s [--LOG---]: %s received ClientOp, finished with log %s\n", ts(), n.Id, n.log.string())
+		debug("%s [--LOG---]: %s received Write, finished with log %s\n", ts(), n.Id, n.log.string())
 	}
 
 	// Run event loop until state changes.
@@ -633,8 +633,8 @@ func (n *Node) runAsLeader() bool {
 			n.handleRequestVote(arg)
 		case arg := <-n.appendEntriesChan:
 			n.handleAppendEntries(arg, n.State)
-		case arg := <-n.clientOpChan:
-			clientOp(arg)
+		case arg := <-n.writeChan:
+			write(arg)
 			broadcast()
 		case arg := <-n.dumpStateChan:
 			arg.respChan <- &pb.DumpStateResponse{State: fmtNode(n)}

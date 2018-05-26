@@ -10,7 +10,7 @@ const initialBackOff = time.Millisecond * 100
 
 const requestVote = "RequestVote"
 const appendEntries = "AppendEntries"
-const clientOp = "ClientOp"
+const write = "Write"
 const dumpState = "DumpState"
 
 const defaultMinElectionTimeout = time.Second * 5

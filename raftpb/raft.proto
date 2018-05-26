@@ -5,7 +5,7 @@ option go_package = "raftpb";
 service Raft {
   rpc RequestVote (RequestVoteRequest) returns (RequestVoteResponse);
   rpc AppendEntries (AppendEntriesRequest) returns (AppendEntriesResponse);
-  rpc ClientOp (ClientOpRequest) returns (ClientOpResponse);
+  rpc Write (WriteRequest) returns (WriteResponse);
   rpc DumpState (DumpStateRequest) returns (DumpStateResponse);
 }
 
@@ -41,11 +41,11 @@ message LogEntry {
   bytes data = 3;
 }
 
-message ClientOpRequest {
+message WriteRequest {
   bytes data = 1;
 }
 
-message ClientOpResponse {
+message WriteResponse {
 }
 
 message DumpStateRequest {

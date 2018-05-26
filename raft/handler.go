@@ -40,11 +40,11 @@ func (n *Node) AppendEntries(ctx context.Context, req *pb.AppendEntriesRequest) 
 	}
 }
 
-// ClientOp simply forwards the requests to the Raft process so they can be handled in serial.
-func (n *Node) ClientOp(ctx context.Context, req *pb.ClientOpRequest) (*pb.ClientOpResponse, error) {
-	respChan := make(chan *pb.ClientOpResponse)
+// Write simply forwards the requests to the Raft process so they can be handled in serial.
+func (n *Node) Write(ctx context.Context, req *pb.WriteRequest) (*pb.WriteResponse, error) {
+	respChan := make(chan *pb.WriteResponse)
 	errChan := make(chan error)
-	n.clientOpChan <- &clientOpArg{
+	n.writeChan <- &writeArg{
 		req:      req,
 		respChan: respChan,
 		errChan:  errChan,

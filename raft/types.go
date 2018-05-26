@@ -51,7 +51,7 @@ type Node struct {
 	// channels for rpc
 	requestVoteChan   chan *requestVoteArg
 	appendEntriesChan chan *appendEntriesArg
-	clientOpChan      chan *clientOpArg
+	writeChan         chan *writeArg
 	dumpStateChan     chan *dumpStateArg
 
 	// timers
@@ -109,9 +109,9 @@ type appendEntriesArg struct {
 	errChan  chan error
 }
 
-type clientOpArg struct {
-	req      *pb.ClientOpRequest
-	respChan chan *pb.ClientOpResponse
+type writeArg struct {
+	req      *pb.WriteRequest
+	respChan chan *pb.WriteResponse
 	errChan  chan error
 }
 
