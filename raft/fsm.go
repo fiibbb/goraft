@@ -443,7 +443,7 @@ func (n *Node) runAsLeader() bool {
 	// broadcast sends `AppendEntriesRequest`s to all peers, including both empty (heartbeat) and non-empty ones.
 	var broadcast = func() {
 		for id := range n.peers {
-			go func(peerId string, req *pb.AppendEntriesRequest, p *peer) {
+			go func(p *peer, req *pb.AppendEntriesRequest) {
 				// If there's no fanout routine running for this peer, set `isRunning` to true and `runningTerm` to
 				// the current request's Term.
 				// If there's already a fanout routine running for this peer, but for an older term, bump the term
@@ -506,7 +506,7 @@ func (n *Node) runAsLeader() bool {
 					}
 					// Send back response.
 					appendEntriesRespChan <- &appendEntriesRespBundle{
-						peerId: peerId,
+						peerId: p.id,
 						req:    req,
 						resp:   resp,
 					}
@@ -514,14 +514,14 @@ func (n *Node) runAsLeader() bool {
 					cancel()
 					return
 				}
-			}(id, &pb.AppendEntriesRequest{
+			}(n.peers[id], &pb.AppendEntriesRequest{
 				Term:              n.Term,
 				LeaderId:          n.Id,
 				PrevLogTerm:       n.Log.last().Term,
 				PrevLogIndex:      n.Log.last().Index,
 				LeaderCommitIndex: n.CommitIndex,
 				Entries:           n.Log.tail(n.NextIndex[id]),
-			}, n.peers[id])
+			})
 		}
 	}
 

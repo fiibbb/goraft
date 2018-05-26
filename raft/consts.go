@@ -13,6 +13,6 @@ const appendEntries = "AppendEntries"
 const clientOp = "ClientOp"
 
 const defaultMinElectionTimeout = time.Second * 5
-const defaultHeartbeatPeriod = time.Second
+const defaultHeartbeatPeriod = time.Second * 3
 const defaultRPCTimeout = time.Second
 const defaultMaxRPCBackOff = time.Second * 30
