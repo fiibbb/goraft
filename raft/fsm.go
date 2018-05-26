@@ -517,8 +517,8 @@ func (n *Node) runAsLeader() bool {
 			}(n.peers[id], &pb.AppendEntriesRequest{
 				Term:              n.Term,
 				LeaderId:          n.Id,
-				PrevLogTerm:       n.Log.last().Term,
-				PrevLogIndex:      n.Log.last().Index,
+				PrevLogTerm:       n.Log.get(n.NextIndex[id] - 1).Term,
+				PrevLogIndex:      n.Log.get(n.NextIndex[id] - 1).Index,
 				LeaderCommitIndex: n.CommitIndex,
 				Entries:           n.Log.tail(n.NextIndex[id]),
 			})
