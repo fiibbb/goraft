@@ -254,7 +254,7 @@ func (n *Node) runAsFollower() bool {
 	// Run event loop until state changes.
 	var electionTimer timer
 	for {
-		n.clock.Step() // Wait until next realClock tick.
+		n.clock.Step() // Wait until next clock tick.
 		// Previous loop iteration may have cleared timer (upon receiving valid heartbeat),
 		// so re-initialize timer if timer is nil.
 		if electionTimer == nil {
@@ -282,7 +282,7 @@ func (n *Node) runAsFollower() bool {
 		if n.State != Follower {
 			break
 		}
-		n.clock.Step() // Wait until next realClock tick.
+		n.clock.Step() // Wait until next clock tick.
 	}
 	return true
 }
@@ -371,7 +371,7 @@ func (n *Node) runAsCandidate() bool {
 	// any RPC we receive, because then if every server in cluster gets in this state then we deadlock.
 	var resps []*pb.RequestVoteResponse
 	for {
-		n.clock.Step() // Wait until next realClock tick.
+		n.clock.Step() // Wait until next clock tick.
 		select {
 		case resp := <-respChan:
 			resps = append(resps, resp)
@@ -407,7 +407,7 @@ func (n *Node) runAsCandidate() bool {
 		if len(resps) >= respsNeeded {
 			break
 		}
-		n.clock.Step() // Wait until next realClock tick.
+		n.clock.Step() // Wait until next clock tick.
 	}
 
 	// Calculate results. Become leader if have enough votes, otherwise become follower.
@@ -599,7 +599,7 @@ func (n *Node) runAsLeader() bool {
 	heartbeatTicker := n.clock.NewTicker(n.heartbeatPeriod)
 	broadcast()
 	for {
-		n.clock.Step() // Wait until next realClock tick.
+		n.clock.Step() // Wait until next clock tick.
 		select {
 		case <-heartbeatTicker.C():
 			broadcast()
@@ -621,7 +621,7 @@ func (n *Node) runAsLeader() bool {
 			heartbeatTicker.Stop()
 			break
 		}
-		n.clock.Step() // Wait until next realClock tick.
+		n.clock.Step() // Wait until next clock tick.
 	}
 	return true
 }
