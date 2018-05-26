@@ -2,7 +2,6 @@ package raft
 
 import (
 	"context"
-	"encoding/json"
 	"math/rand"
 	"time"
 
@@ -37,14 +36,6 @@ func getSrc(ctx context.Context) string {
 
 func withSrc(ctx context.Context, src string) context.Context {
 	return metadata.NewOutgoingContext(ctx, metadata.Pairs(source, src))
-}
-
-func dumpState(n *Node) string {
-	s, err := json.Marshal(n)
-	if err != nil {
-		debug("failed to dump state")
-	}
-	return string(s)
 }
 
 func init() {

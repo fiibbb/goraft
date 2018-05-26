@@ -83,6 +83,7 @@ func NewNode(
 		requestVoteChan:   make(chan *requestVoteArg),
 		appendEntriesChan: make(chan *appendEntriesArg),
 		clientOpChan:      make(chan *clientOpArg),
+		dumpStateChan:     make(chan *dumpStateArg),
 
 		minElectionTimeout: minElectionTimeout,
 		electionTimeout:    randElectionTimeout(minElectionTimeout),
@@ -275,7 +276,7 @@ func (n *Node) runAsFollower() bool {
 		case arg := <-n.clientOpChan:
 			arg.errChan <- ErrCanNotHandleClientOpFollower
 		case arg := <-n.dumpStateChan:
-			arg.respChan <- &pb.DumpStateResponse{State: dumpState(n)}
+			arg.respChan <- &pb.DumpStateResponse{State: fmtNode(n)}
 		case <-n.stopChan:
 			return false
 		}
@@ -382,7 +383,7 @@ func (n *Node) runAsCandidate() bool {
 		case arg := <-n.clientOpChan:
 			arg.errChan <- ErrCanNotHandleClientOpCandidate
 		case arg := <-n.dumpStateChan:
-			arg.respChan <- &pb.DumpStateResponse{State: dumpState(n)}
+			arg.respChan <- &pb.DumpStateResponse{State: fmtNode(n)}
 		case <-n.stopChan:
 			return false
 		}
@@ -613,7 +614,7 @@ func (n *Node) runAsLeader() bool {
 			clientOp(arg)
 			broadcast()
 		case arg := <-n.dumpStateChan:
-			arg.respChan <- &pb.DumpStateResponse{State: dumpState(n)}
+			arg.respChan <- &pb.DumpStateResponse{State: fmtNode(n)}
 		case <-n.stopChan:
 			return false
 		}

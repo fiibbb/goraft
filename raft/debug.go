@@ -38,6 +38,8 @@ func callInfo(src, dst, method string, req, resp interface{}) string {
 		reqMsg, ok = req.(*pb.AppendEntriesRequest)
 	case clientOp:
 		reqMsg, ok = req.(*pb.ClientOpRequest)
+	case dumpState:
+		reqMsg, ok = req.(*pb.DumpStateRequest)
 	default:
 		panic("unrecognized method")
 	}
@@ -56,6 +58,8 @@ func callInfo(src, dst, method string, req, resp interface{}) string {
 			respMsg, ok = resp.(*pb.AppendEntriesResponse)
 		case clientOp:
 			respMsg, ok = resp.(*pb.ClientOpResponse)
+		case dumpState:
+			respMsg, ok = resp.(*pb.DumpStateResponse)
 		default:
 			panic("unrecognized method")
 		}
@@ -73,7 +77,7 @@ func callInfo(src, dst, method string, req, resp interface{}) string {
 }
 
 func isWhitedMethod(method string) bool {
-	return method == clientOp
+	return method == clientOp || method == dumpState
 }
 
 func debugInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -173,6 +177,13 @@ func runDebugger(peers []peerArg) {
 			}
 		}
 	})
+	m.HandleFunc("/states", func(w http.ResponseWriter, r *http.Request) {
+		var states []string
+		for _, p := range peers {
+			states = append(states, DumpState(p.addr))
+		}
+		w.Write([]byte(strings.Join(states, "\n")))
+	})
 	panic(http.ListenAndServe("localhost:8090", m))
 }
 
@@ -211,12 +222,30 @@ func RunBasicEnsemble() {
 	runDebugger(peers)
 }
 
-func ClientOp(data []byte, addr string) error {
+func withClient(addr string, f func(pb.RaftClient)) {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
-		return err
+		panic(err)
 	}
-	c := pb.NewRaftClient(conn)
-	_, err = c.ClientOp(context.Background(), &pb.ClientOpRequest{Data: data})
+	f(pb.NewRaftClient(conn))
+}
+
+func DumpState(addr string) string {
+	var resp *pb.DumpStateResponse
+	var err error
+	withClient(addr, func(client pb.RaftClient) {
+		resp, err = client.DumpState(context.Background(), &pb.DumpStateRequest{})
+		if err != nil {
+			panic(err)
+		}
+	})
+	return resp.State
+}
+
+func ClientOp(data []byte, addr string) error {
+	var err error
+	withClient(addr, func(client pb.RaftClient) {
+		_, err = client.ClientOp(context.Background(), &pb.ClientOpRequest{Data: data})
+	})
 	return err
 }

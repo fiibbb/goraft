@@ -17,14 +17,20 @@ func ts() string {
 	return time.Now().Format("03:04:05")
 }
 
+func fmtNode(n *Node) string {
+	return fmt.Sprintf(
+		"{id:%s,term:%d,state:%s,votedFor:%s,commitIndex:%d,log:%s}",
+		n.Id, n.Term, fmtState(n.State), n.VotedFor, n.commitIndex, n.log.string())
+}
+
 func fmtState(s ProcessState) string {
 	switch s {
 	case Follower:
-		return "FOLLOWER"
+		return "F"
 	case Candidate:
-		return "CANDIDATE"
+		return "C"
 	case Leader:
-		return "LEADER"
+		return "L"
 	}
 	panic("unrecognized state")
 }
