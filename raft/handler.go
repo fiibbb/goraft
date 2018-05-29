@@ -9,6 +9,7 @@ import (
 // RequestVote simply forwards the requests to the Raft process so they can be handled in serial.
 func (n *Node) RequestVote(ctx context.Context, req *pb.RequestVoteRequest) (*pb.RequestVoteResponse, error) {
 	arg := &requestVoteArg{
+		ctx:      ctx,
 		req:      req,
 		respChan: make(chan *pb.RequestVoteResponse),
 		errChan:  make(chan error),
@@ -25,6 +26,7 @@ func (n *Node) RequestVote(ctx context.Context, req *pb.RequestVoteRequest) (*pb
 // AppendEntries simply forwards the requests to the Raft process so they can be handled in serial.
 func (n *Node) AppendEntries(ctx context.Context, req *pb.AppendEntriesRequest) (*pb.AppendEntriesResponse, error) {
 	arg := &appendEntriesArg{
+		ctx:      ctx,
 		req:      req,
 		respChan: make(chan *pb.AppendEntriesResponse),
 		errChan:  make(chan error),
@@ -41,6 +43,7 @@ func (n *Node) AppendEntries(ctx context.Context, req *pb.AppendEntriesRequest) 
 // Write simply forwards the requests to the Raft process so they can be handled in serial.
 func (n *Node) Write(ctx context.Context, req *pb.WriteRequest) (*pb.WriteResponse, error) {
 	arg := &writeArg{
+		ctx:      ctx,
 		req:      req,
 		respChan: make(chan *pb.WriteResponse),
 		errChan:  make(chan error),
@@ -57,6 +60,7 @@ func (n *Node) Write(ctx context.Context, req *pb.WriteRequest) (*pb.WriteRespon
 // DumpState simply forwards the requests to the Raft process so they can be handled in serial.
 func (n *Node) DumpState(ctx context.Context, req *pb.DumpStateRequest) (*pb.DumpStateResponse, error) {
 	arg := &dumpStateArg{
+		ctx:      ctx,
 		req:      req,
 		respChan: make(chan *pb.DumpStateResponse),
 		errChan:  make(chan error),

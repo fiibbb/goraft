@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -97,24 +98,28 @@ type appendEntriesRespBundle struct {
 }
 
 type requestVoteArg struct {
+	ctx      context.Context
 	req      *pb.RequestVoteRequest
 	respChan chan *pb.RequestVoteResponse
 	errChan  chan error
 }
 
 type appendEntriesArg struct {
+	ctx      context.Context
 	req      *pb.AppendEntriesRequest
 	respChan chan *pb.AppendEntriesResponse
 	errChan  chan error
 }
 
 type writeArg struct {
+	ctx      context.Context
 	req      *pb.WriteRequest
 	respChan chan *pb.WriteResponse
 	errChan  chan error
 }
 
 type dumpStateArg struct {
+	ctx      context.Context
 	req      *pb.DumpStateRequest
 	respChan chan *pb.DumpStateResponse
 	errChan  chan error
