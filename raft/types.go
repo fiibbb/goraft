@@ -25,26 +25,25 @@ type PendingLog struct {
 }
 
 type Node struct {
-	// raft states
+	// leader election states
 	Id       string
 	Term     uint64
 	State    ProcessState
 	VotedFor string
 
-	// data states
+	// log replication states (all nodes)
 	log          *Log
 	pendingLog   *PendingLog
 	commitIndex  uint64
 	appliedIndex uint64
-
-	// leader states, reinitialize these upon election
+	// log replication states (leader only, reinitialize these upon election)
 	nextIndex  map[string]uint64 // peer id -> next log entry to send to that peer (initialized to leader last log index + 1)
 	matchIndex map[string]uint64 // peer id -> highest log entry index known to be replicated to that peer (initialized to 0, increases monotonically)
 
 	// peer state
 	peers map[string]*peer
 
-	// server state
+	// grpc server state
 	addr   string
 	server *grpc.Server
 
