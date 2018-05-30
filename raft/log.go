@@ -109,8 +109,8 @@ func newPendingLog() *PendingLog {
 func newPendingLogEntry(entry *pb.LogEntry) *pendingLogEntry {
 	return &pendingLogEntry{
 		entry:   entry,
-		success: make(chan interface{}),
-		failure: make(chan interface{}),
+		success: make(chan struct{}),
+		failure: make(chan struct{}),
 	}
 }
 
@@ -118,14 +118,10 @@ func (pl *PendingLog) add(entry *pendingLogEntry) {
 	pl.entries[entry.entry] = entry
 }
 
-func (pl *PendingLog) get(entry *pb.LogEntry) *pendingLogEntry {
-	return pl.entries[entry]
-}
-
 func (pl *PendingLog) accept(entries []*pb.LogEntry) {
 	for _, e := range entries {
 		if _, exists := pl.entries[e]; exists {
-			pl.entries[e].success <- 1
+			pl.entries[e].success <- struct{}{}
 			delete(pl.entries, e)
 		}
 	}
@@ -134,7 +130,7 @@ func (pl *PendingLog) accept(entries []*pb.LogEntry) {
 func (pl *PendingLog) reject(entries []*pb.LogEntry) {
 	for _, e := range entries {
 		if _, exists := pl.entries[e]; exists {
-			pl.entries[e].failure <- 1
+			pl.entries[e].failure <- struct{}{}
 			delete(pl.entries, e)
 		}
 	}

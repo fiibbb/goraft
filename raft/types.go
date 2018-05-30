@@ -64,7 +64,7 @@ type Node struct {
 	// life cycle
 	clock    clock
 	started  bool
-	stopChan chan interface{}
+	stopChan chan struct{}
 }
 
 type fanoutStatus struct {
@@ -75,8 +75,8 @@ type fanoutStatus struct {
 
 type pendingLogEntry struct {
 	entry   *pb.LogEntry
-	success chan interface{}
-	failure chan interface{}
+	success chan struct{}
+	failure chan struct{}
 }
 
 type peer struct {

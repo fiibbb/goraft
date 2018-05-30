@@ -93,7 +93,7 @@ func NewNode(
 
 		clock:    clock,
 		started:  false,
-		stopChan: make(chan interface{}),
+		stopChan: make(chan struct{}),
 	}, nil
 }
 
@@ -127,7 +127,7 @@ func (n *Node) Stop() error {
 		return ErrNotStartedYet
 	}
 	n.server.Stop()
-	n.stopChan <- 1
+	n.stopChan <- struct{}{}
 	n.started = false
 	return nil
 }
